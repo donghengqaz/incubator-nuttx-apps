@@ -1147,7 +1147,7 @@ int wapi_set_txpower(int sock, FAR const char *ifname, int power,
  ****************************************************************************/
 
 int wapi_scan_channel_init(int sock, FAR const char *ifname,
-                           FAR const char *essid,
+                           FAR const char *essid, FAR uint8_t *bssid,
                            uint8_t *channels, int num_channels)
 {
   struct iw_scan_req req;
@@ -1163,8 +1163,6 @@ int wapi_scan_channel_init(int sock, FAR const char *ifname,
     {
       memset(&req, 0, sizeof(req));
       req.essid_len       = essid_len;
-      req.bssid.sa_family = ARPHRD_ETHER;
-      memset(req.bssid.sa_data, 0xff, IFHWADDRLEN);
       memcpy(req.essid, essid, essid_len);
       wrq.u.data.pointer  = (caddr_t)&req;
       wrq.u.data.length   = sizeof(req);
@@ -1173,10 +1171,40 @@ int wapi_scan_channel_init(int sock, FAR const char *ifname,
 
   if (channels && num_channels > 0)
     {
+      if (!wrq.u.data.pointer)
+        {
+          wrq.u.data.pointer  = (caddr_t)&req;
+          wrq.u.data.length   = sizeof(req);
+          wrq.u.data.flags    = IW_SCAN_THIS_ESSID;
+          memset(&req, 0, sizeof(req));
+        }
+
       req.num_channels = num_channels;
       for (i = 0; i < num_channels; i++)
         {
           req.channel_list[i].m = channels[i];
+        }
+    }
+
+  if (bssid)
+    {
+      if (!wrq.u.data.pointer)
+        {
+          wrq.u.data.pointer  = (caddr_t)&req;
+          wrq.u.data.length   = sizeof(req);
+          wrq.u.data.flags    = IW_SCAN_THIS_ESSID;
+          memset(&req, 0, sizeof(req));
+        }
+
+      req.bssid.sa_family = ARPHRD_ETHER;
+      memcpy(req.bssid.sa_data, bssid, IFHWADDRLEN);
+    }
+  else
+    {
+      if (wrq.u.data.pointer)
+        {
+          req.bssid.sa_family = ARPHRD_ETHER;
+          memset(req.bssid.sa_data, 0xff, IFHWADDRLEN);
         }
     }
 
@@ -1201,9 +1229,12 @@ int wapi_scan_channel_init(int sock, FAR const char *ifname,
  *
  ****************************************************************************/
 
-int wapi_scan_init(int sock, FAR const char *ifname, FAR const char *essid)
+int wapi_scan_init(int sock, FAR const char *ifname, FAR const char *essid,
+                   FAR uint8_t *bssid, FAR uint8_t *channels,
+                   int num_channel)
 {
-  return wapi_scan_channel_init(sock, ifname, essid, NULL, 0);
+  return wapi_scan_channel_init(sock, ifname, essid, bssid, channels,
+                                num_channel);
 }
 
 /****************************************************************************

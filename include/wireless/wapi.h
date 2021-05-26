@@ -673,7 +673,9 @@ int wapi_make_socket(void);
  *
  ****************************************************************************/
 
-int wapi_scan_init(int sock, FAR const char *ifname, FAR const char *essid);
+int wapi_scan_init(int sock, FAR const char *ifname, FAR const char *essid,
+                   FAR uint8_t *bssid, FAR uint8_t *channels,
+                   int num_channel);
 
 /****************************************************************************
  * Name: wapi_scan_channel_init
@@ -685,7 +687,7 @@ int wapi_scan_init(int sock, FAR const char *ifname, FAR const char *essid);
  ****************************************************************************/
 
 int wapi_scan_channel_init(int sock, FAR const char *ifname,
-                           FAR const char *essid,
+                           FAR const char *essid, FAR uint8_t *bssid,
                            uint8_t *channels, int num_channels);
 
 /****************************************************************************

@@ -111,7 +111,7 @@ static const struct wapi_command_s g_wapi_commands[] =
 {
   {"help",         0, 0, NULL},
   {"show",         1, 1, wapi_show_cmd},
-  {"scan",         1, 2, wapi_scan_cmd},
+  {"scan",         1, 4, wapi_scan_cmd},
   {"scan_results", 1, 1, wapi_scan_results_cmd},
   {"ip",           2, 2, wapi_ip_cmd},
   {"mask",         2, 2, wapi_mask_cmd},
@@ -708,7 +708,7 @@ static int wapi_scan_results_cmd(int sock, int argc, FAR char **argv)
 
   /* Print found aps */
 
-  printf("bssid / frequency / signal level / ssid\n");
+  printf("bssid_data / frequency / signal level / ssid\n");
   for (info = list.head.scan; info; info = info->next)
     {
       printf("%02x:%02x:%02x:%02x:%02x:%02x\t%g\t%d\t%s\n",
@@ -739,12 +739,93 @@ static int wapi_scan_cmd(int sock, int argc, FAR char **argv)
 {
   FAR const char *essid;
   int ret;
+  int i;
+  char *endptr;
+  long channel_mask;
+  int num_channels = 0;
+  uint8_t channels[IW_MAX_FREQUENCIES];
+  uint8_t bssid_data[IFHWADDRLEN];
+  uint8_t *bssid;
 
-  essid = argc > 1 ? argv[1] : NULL;
+  if (argc > 1 && argv[1])
+    {
+      if (!strcmp(argv[1], "NULL"))
+        {
+          essid = NULL;
+        }
+      else
+        {
+          essid = argv[1];
+        }
+    }
+  else
+    {
+      essid = NULL;
+    }
+
+  if (argc > 2 && argv[2])
+    {
+      if (!strcmp(argv[2], "NULL"))
+        {
+          bssid = NULL;
+        }
+      else
+        {
+          if (strlen(argv[2]) != IFHWADDRLEN * 2)
+            {
+              WAPI_IOCTL_STRERROR(SIOCSIWSCAN, -EINVAL);
+              return -EINVAL;
+            }
+
+          bssid = bssid_data;
+          for (i = 0; i < IFHWADDRLEN; i++)
+            {
+              ret = sscanf(argv[2] + i * 2, "%02hhx",
+                           &bssid_data[(IFHWADDRLEN - 1) - i]);
+              if (ret < 0)
+                {
+                  WAPI_IOCTL_STRERROR(SIOCSIWSCAN, -EINVAL);
+                  return -EINVAL;
+                }
+            }
+        }
+    }
+  else
+    {
+      bssid = NULL;
+    }
+
+  if (argc > 3 && argv[3])
+    {
+      channel_mask = strtol(argv[3], &endptr, 16);
+      for (i = 0; i < IW_MAX_FREQUENCIES; i++)
+        {
+          if (channel_mask & (1 << i))
+            {
+              channels[num_channels++] = i;
+            }
+        }
+    }
+
+#if 0
+  if (bssid)
+    {
+      for (i = 0; i < IFHWADDRLEN; i++)
+        {
+          printf("MAC[%d]: %x\n", i, bssid[i]);
+        }
+    }
+
+  printf("num_channels=%d\n", num_channels);
+  for (i = 0; i < num_channels; i++)
+    {
+      printf("channel %d\n", channels[i]);
+    }
+#endif
 
   /* Start scan */
 
-  ret = wapi_scan_init(sock, argv[0], essid);
+  ret = wapi_scan_init(sock, argv[0], essid, bssid, channels, num_channels);
   if (ret < 0)
     {
       return ret;
@@ -885,7 +966,7 @@ static int wapi_save_config_cmd(int sock, int argc, FAR char **argv)
       return ret;
     }
 
-  conf.bssid = ether_ntoa(&ap);
+  conf.bssid_data = ether_ntoa(&ap);
 
   memset(psk, 0, sizeof(psk));
   ret = wpa_driver_wext_get_key_ext(sock,
@@ -949,7 +1030,8 @@ static void wapi_showusage(FAR const char *progname, int exitcode)
 
   fprintf(stderr, "Usage:\n");
   fprintf(stderr, "\t%s show         <ifname>\n", progname);
-  fprintf(stderr, "\t%s scan         <ifname>\n", progname);
+  fprintf(stderr, "\t%s scan         <ifname> <ssid>/NULL <bssid>/NULL "
+                  "channels\n", progname);
   fprintf(stderr, "\t%s scan_results <ifname>\n", progname);
   fprintf(stderr, "\t%s ip           <ifname> <IP address>\n", progname);
   fprintf(stderr, "\t%s mask         <ifname> <mask>\n", progname);
